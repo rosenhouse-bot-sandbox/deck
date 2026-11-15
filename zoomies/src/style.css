@@ -1,0 +1,189 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  cursor: none;
+}
+
+canvas,
+#ui {
+  position: fixed;
+  inset: 0;
+}
+
+#ui {
+  font-family: ui-rounded, 'Arial Rounded MT Bold', 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 0.06em 0 #000a, 0 0 0.3em #0008;
+  font-size: 2.4vh;
+  user-select: none;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  background: #0b103066;
+}
+
+.title {
+  font-size: 5em;
+  letter-spacing: 0.04em;
+  color: #ffe14d;
+}
+
+.footer {
+  position: absolute;
+  bottom: 4vh;
+  font-size: 1.3em;
+  white-space: pre;
+}
+
+.slots {
+  display: flex;
+  gap: 2vw;
+}
+
+.slot {
+  width: 20vw;
+  padding: 3vh 0;
+  border-radius: 2vh;
+  text-align: center;
+  background: #fff2;
+  border: 0.6vh dashed #fff6;
+}
+
+.slot.joined {
+  background: var(--player);
+  border-style: solid;
+  border-color: #fff;
+}
+
+.slot .name {
+  font-size: 3em;
+}
+
+.slot .help {
+  margin-top: 1vh;
+  font-size: 0.9em;
+}
+
+.controls {
+  position: absolute;
+  bottom: 10vh;
+  white-space: pre;
+}
+
+.arrows,
+.laps {
+  font-size: 2em;
+}
+
+.blurb {
+  font-size: 1.6em;
+}
+
+.places {
+  display: grid;
+  gap: 0.8vh;
+  font-size: 1.5em;
+}
+
+.place {
+  display: grid;
+  grid-template-columns: 4em 8em 5em;
+  padding: 0.6vh 2vw;
+  border-radius: 1vh;
+  background: #fff2;
+  border-left: 1.2vh solid var(--player);
+}
+
+.place.human {
+  background: #fff5;
+}
+
+.place .time {
+  text-align: right;
+}
+
+.banner {
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 7em;
+  color: #ffe14d;
+}
+
+.hud {
+  position: absolute;
+  box-sizing: border-box;
+  border: 0.4vh solid var(--player);
+}
+
+.hud > * {
+  position: absolute;
+}
+
+.place-badge {
+  left: 2vh;
+  top: 1vh;
+  font-size: 3.2em;
+  color: var(--player);
+}
+
+.lap {
+  right: 2vh;
+  top: 1.5vh;
+  font-size: 1.5em;
+}
+
+.speed {
+  right: 2vh;
+  bottom: 1.5vh;
+  font-size: 1.3em;
+}
+
+.item {
+  left: 2vh;
+  bottom: 1.5vh;
+  font-size: 1.5em;
+  padding: 0.2em 0.6em;
+  border-radius: 0.5em;
+  background: #000a;
+}
+
+.item:empty {
+  display: none;
+}
+
+.item[data-item='turbo'] {
+  color: #ffb020;
+}
+
+.item[data-item='shield'] {
+  color: #66e0ff;
+}
+
+.item[data-item='goo'] {
+  color: #7be03a;
+}
+
+.item[data-item='ball'] {
+  color: #ff4fa3;
+}
+
+.notice {
+  left: 0;
+  right: 0;
+  top: 30%;
+  text-align: center;
+  font-size: 2.4em;
+  color: #ffe14d;
+}
