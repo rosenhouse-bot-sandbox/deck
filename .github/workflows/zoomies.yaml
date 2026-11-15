@@ -1,0 +1,26 @@
+name: zoomies
+on:
+  pull_request:
+    paths: [zoomies/**, .github/workflows/zoomies.yaml]
+  push:
+    branches: [main]
+    paths: [zoomies/**, .github/workflows/zoomies.yaml]
+defaults:
+  run:
+    working-directory: zoomies
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: zoomies/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
