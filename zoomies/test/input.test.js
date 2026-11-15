@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPads, readPad } from '../src/input.js';
+import { after, createPads, readPad } from '../src/input.js';
 import { viewports } from '../src/layout.js';
 
 function gamepad({ buttons = {}, axes = [0, 0], index = 0 } = {}) {
@@ -54,6 +54,18 @@ describe('readPad', () => {
     expect(readPad(gamepad({ axes: [0, 0.9] })).pressed).toMatchObject({ down: true, up: false });
     expect(readPad(gamepad({ axes: [0, -0.9] })).pressed).toMatchObject({ down: false, up: true });
     expect(readPad(gamepad({ axes: [0.5, 0.5] })).pressed).toMatchObject({ right: false, down: false });
+  });
+});
+
+describe('after', () => {
+  it('ignores input until the screen has been up for a while', () => {
+    const seen = [];
+    const update = after(1, (pads, dt) => seen.push([pads, dt]));
+    update('early', 0.6);
+    update('still early', 0.4);
+    expect(seen).toEqual([]);
+    update('late', 0.1);
+    expect(seen).toEqual([['late', 0.1]]);
   });
 });
 

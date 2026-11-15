@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSlots, entrantsFor, updateLobby } from '../src/lobby.js';
+import { createSlots, dropMissing, entrantsFor, updateLobby } from '../src/lobby.js';
 
 const pads = (presses) => new Map(Object.entries(presses).map(([index, button]) => [Number(index), { pressed: { [button]: true } }]));
 const joinedPads = (slots) => slots.filter((s) => s.joined).map((s) => s.pad);
@@ -47,6 +47,14 @@ describe('updateLobby', () => {
     updateLobby(slots, pads({ 0: 'a', 1: 'a' }));
     expect(updateLobby(slots, pads({ 1: 'none' }))).toBe('changed');
     expect(joinedPads(slots)).toEqual([1]);
+  });
+
+  it('drops players whose pads have gone on request', () => {
+    const slots = createSlots();
+    updateLobby(slots, pads({ 0: 'a', 1: 'a' }));
+    expect(dropMissing(slots, pads({ 0: 'none', 1: 'none' }))).toBe(false);
+    expect(dropMissing(slots, pads({ 0: 'none' }))).toBe(true);
+    expect(joinedPads(slots)).toEqual([0]);
   });
 
   it('starts only for a player who has joined', () => {

@@ -1,17 +1,18 @@
 import { createAudio } from './audio.js';
 import { createDriver } from './drive.js';
-import { createPads } from './input.js';
+import { after, createPads } from './input.js';
 import { viewports } from './layout.js';
 import { LEVELS, trackFor } from './levels.js';
-import { createSlots, entrantsFor, updateLobby } from './lobby.js';
+import { createSlots, dropMissing, entrantsFor, updateLobby } from './lobby.js';
 import { createRace } from './race.js';
 import { createHud, showJoin, showPause, showResults, showSelect } from './ui.js';
 import { createBackdrop, createRaceView, createRenderer } from './view.js';
 
 const HUB_URL = '../';
 const MAX_LAPS = 5;
-// A is also the throttle, so the results ignore it at first.
-const RESULTS_HOLD = 1.5;
+// A is also the throttle, so these screens ignore input at first.
+const RESULTS_HOLD = 3;
+const SELECT_HOLD = 1.5;
 
 const renderer = createRenderer(document.querySelector('canvas'));
 const root = document.querySelector('#ui');
@@ -52,7 +53,8 @@ function enterJoin() {
 function enterSelect() {
   leaveRace();
   showSelect(root, LEVELS, levelIndex, laps);
-  update = (input) => {
+  update = after(SELECT_HOLD, (input) => {
+    if (dropMissing(slots, input) && !slots.some((slot) => slot.joined)) return enterJoin();
     const turn = (anyPressed(input, 'right') ? 1 : 0) - (anyPressed(input, 'left') ? 1 : 0);
     const more = (anyPressed(input, 'up') ? 1 : 0) - (anyPressed(input, 'down') ? 1 : 0);
     if (anyPressed(input, 'a')) return enterRace();
@@ -64,7 +66,7 @@ function enterSelect() {
       backdrop = createBackdrop(LEVELS[levelIndex]);
       showSelect(root, LEVELS, levelIndex, laps);
     }
-  };
+  });
 }
 
 function enterRace() {
@@ -84,8 +86,8 @@ function resumeRace() {
   const { race, rects, advance } = session;
   const hud = createHud(root, race, rects);
   update = (input, dt) => {
-    const pauser = [...input].find(([, pad]) => pad.pressed.start);
-    if (pauser) return enterPause(pauser[0]);
+    const pauser = race.racers.find((racer) => input.get(racer.pad)?.pressed.start);
+    if (pauser) return enterPause(pauser);
     for (const event of advance(input, dt)) {
       if (event.racer && !event.racer.human) continue;
       audio.play(event.type);
@@ -98,9 +100,9 @@ function resumeRace() {
 
 // Only the player who paused can resume or quit, so a brake press elsewhere does not end the race.
 function enterPause(pauser) {
-  showPause(root);
+  showPause(root, pauser.name);
   update = (input) => {
-    const pad = input.get(pauser);
+    const pad = input.get(pauser.pad);
     if (!pad || pad.pressed.a || pad.pressed.start) return resumeRace();
     if (pad.pressed.b) return enterSelect();
   };
@@ -108,11 +110,9 @@ function enterPause(pauser) {
 
 function enterResults() {
   showResults(root, session.race);
-  let shown = 0;
-  update = (input, dt) => {
-    shown += dt;
-    if (shown > RESULTS_HOLD && anyPressed(input, 'a')) enterSelect();
-  };
+  update = after(RESULTS_HOLD, (input) => {
+    if (anyPressed(input, 'a')) enterSelect();
+  });
 }
 
 let last = performance.now();

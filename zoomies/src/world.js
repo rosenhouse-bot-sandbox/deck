@@ -3,16 +3,17 @@ import { padsFor } from './race.js';
 import { pointAt } from './track.js';
 
 const THEMES = {
-  circuit: { sky: 0x8fd3ff, ground: 0x5cb85c, road: 0x4a505c, kerbs: [0xe63946, 0xffffff], fog: 650 },
-  dunes: { sky: 0xffdfae, ground: 0xe2b96b, road: 0xb07a45, kerbs: [0x8a5a2b, 0x9c6a38], fog: 600 },
-  lagoon: { sky: 0x9be7ff, ground: 0x1e90c8, road: 0x7fe3ee, kerbs: null, fog: 650 },
-  peaks: { sky: 0xd6ecff, ground: 0xf4f8ff, road: 0xa9d3ee, kerbs: [0x6fa8d6, 0xe8f4ff], fog: 550 },
-  stars: { sky: 0x070720, ground: null, road: 0x2a1a5e, kerbs: [0x00ffe1, 0xff3df2], fog: null },
+  circuit: { sky: 0x8fd3ff, ground: 0x5cb85c, road: 0x4a505c, kerbs: [0xe63946, 0xffffff], fence: [0x2b6cb0, 0xffffff], fog: 650 },
+  dunes: { sky: 0xffdfae, ground: 0xe2b96b, road: 0xb07a45, kerbs: [0x8a5a2b, 0x9c6a38], fence: [0x7a4f2a, 0xf2dca0], fog: 600 },
+  lagoon: { sky: 0x9be7ff, ground: 0x1e90c8, road: 0x7fe3ee, kerbs: null, fence: [0xffd23d, 0xff7a1a], fog: 650 },
+  peaks: { sky: 0xd6ecff, ground: 0xf4f8ff, road: 0xa9d3ee, kerbs: [0x6fa8d6, 0xe8f4ff], fence: [0xe63946, 0xffffff], fog: 550 },
+  stars: { sky: 0x070720, ground: null, road: 0x2a1a5e, kerbs: [0x00ffe1, 0xff3df2], fence: [0x00ffe1, 0xff3df2], fog: null },
 };
 
 const WATER_LEVEL = 0;
 const ROAD_LIFT = 0.3;
 const KERB = 1.2;
+const FENCE_HEIGHT = 1.1;
 
 function seededRandom(text) {
   let seed = [...text].reduce((hash, character) => hash * 31 + character.charCodeAt(0), 7) | 0;
@@ -53,6 +54,26 @@ function ribbon(track, { from = 0, to = track.n, offsets, yAt, colorAt }) {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
   return geometry;
+}
+
+// Builds a low fence along the track at `offset`, in two alternating colours.
+function fence(track, offset, yAt, colors) {
+  const positions = [];
+  const tints = [];
+  const color = new THREE.Color();
+  for (let row = 0; row < track.n; row++) {
+    const a = pointAt(track, row, offset);
+    const b = pointAt(track, row + 1, offset);
+    const [ya, yb] = [yAt(a), yAt(b)];
+    positions.push(a.x, ya, a.z, b.x, yb, b.z, b.x, yb + FENCE_HEIGHT, b.z);
+    positions.push(a.x, ya, a.z, b.x, yb + FENCE_HEIGHT, b.z, a.x, ya + FENCE_HEIGHT, a.z);
+    color.setHex(colors[Math.floor(row / 3) % 2]);
+    for (let i = 0; i < 6; i++) tints.push(color.r, color.g, color.b);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(tints, 3));
+  return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
 }
 
 // Adds instanced copies of a prop made of several parts.
@@ -254,6 +275,8 @@ export function buildWorld(level, track) {
       );
     }
   }
+  // The fence marks the wall that keeps racers near the road.
+  for (const side of [-1, 1]) scene.add(fence(track, side * (hw + level.shoulder + 1), lifted(0), theme.fence));
   if (level.id === 'circuit') {
     scene.add(
       new THREE.Mesh(

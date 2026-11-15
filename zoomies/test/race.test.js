@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assisted, botInput } from '../src/ai.js';
 import { LEVELS, trackFor } from '../src/levels.js';
 import { COUNTDOWN, createRace, lapOf, stepRace } from '../src/race.js';
-import { pointAt } from '../src/track.js';
+import { angleDiff, pointAt } from '../src/track.js';
 
 const DT = 1 / 60;
 const level = LEVELS[0];
@@ -148,6 +148,17 @@ describe('road', () => {
     expect(Math.abs(racer.offset)).toBeLessThanOrEqual(level.halfWidth + level.shoulder + 0.01);
     // Scraping the wall costs more speed than the rough ground alone.
     expect(racer.speed).toBeLessThan(level.handling.maxSpeed * level.offroad * 0.8);
+  });
+
+  it('turns a racer who hits the wall along the track, so nobody gets stuck', () => {
+    const race = start();
+    const racer = race.racers[0];
+    racer.heading = racer.slide += Math.PI / 2;
+    steps(race, 4, () => ({ 0: GO }));
+    const { dist } = racer;
+    steps(race, 4, () => ({ 0: GO }));
+    expect(racer.dist - dist).toBeGreaterThan(20);
+    expect(Math.abs(angleDiff(racer.heading, pointAt(track, racer.s).heading))).toBeLessThan(0.3);
   });
 
   it('slows racers on the shoulder to the off-road top speed', () => {

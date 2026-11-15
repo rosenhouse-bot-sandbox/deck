@@ -135,8 +135,8 @@ export function createRaceView(race) {
     const back = CHASE_DISTANCE + chase.boost * 2;
     const x = racer.x - Math.sin(chase.heading) * back;
     const z = racer.z - Math.cos(chase.heading) * back;
-    const floor = level.floating ? y : world.groundY(x, z);
-    camera.position.set(x, Math.max(y + CHASE_HEIGHT, floor + 2.5), z);
+    const floor = world.groundY(x, z, racer.s - back / track.spacing);
+    camera.position.set(x, Math.max(y + CHASE_HEIGHT, floor + 4), z);
     camera.lookAt(racer.x + Math.sin(chase.heading) * 6, y + 2, racer.z + Math.cos(chase.heading) * 6);
   }
 

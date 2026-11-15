@@ -36,6 +36,12 @@ async function open() {
 }
 
 const screenIs = (page, name) => page.waitForSelector(`body[data-screen=${name}]`);
+
+// The level select ignores presses at first, so that a held throttle cannot start a race.
+async function selectIsReady(page) {
+  await screenIs(page, 'select');
+  await page.waitForTimeout(3000);
+}
 const text = (page, selector) => page.locator(selector).first().textContent();
 
 async function join(page, players) {
@@ -44,7 +50,7 @@ async function join(page, players) {
     await press(page, i, BUTTON.a);
   }
   await press(page, 0, BUTTON.start);
-  await screenIs(page, 'select');
+  await selectIsReady(page);
 }
 
 // A coarse grid of [r, g, b] samples from the page, or from a `clip` of it.
@@ -98,6 +104,7 @@ for (const [index, id] of LEVEL_IDS.entries()) {
     await press(page, 0, BUTTON.a);
     await screenIs(page, 'race');
     assert.equal(await page.locator('.hud').count(), 2);
+  assert.deepEqual(await page.locator('.hud .banner').allTextContents(), ['3', '3']);
 
     await hold(page, 0, [BUTTON.rt]);
     await page.waitForFunction(() => parseInt(document.querySelector('.hud[data-player=P1] .speed').textContent) > 40, null, { timeout: 30000 });
@@ -116,7 +123,7 @@ test('a one-lap race with steering help ends on the results, then returns to the
   await press(page, 0, BUTTON.a);
   await press(page, 0, BUTTON.x);
   await press(page, 0, BUTTON.start);
-  await screenIs(page, 'select');
+  await selectIsReady(page);
   await press(page, 0, BUTTON.down);
   await press(page, 0, BUTTON.down);
   assert.match(await text(page, '.laps'), /1 lap /);
@@ -138,7 +145,7 @@ test('a one-lap race with steering help ends on the results, then returns to the
   await page.waitForTimeout(500);
   await screenIs(page, 'results');
   await hold(page, 0, []);
-  for (let i = 0; i < 40 && (await page.locator('body[data-screen=results]').count()); i++) await press(page, 0, BUTTON.a);
+  for (let i = 0; i < 60 && (await page.locator('body[data-screen=results]').count()); i++) await press(page, 0, BUTTON.a);
   await screenIs(page, 'select');
   assert.deepEqual(errors, []);
   await page.close();
@@ -149,8 +156,13 @@ test('only the player who paused can quit the race', async () => {
   await join(page, 2);
   await press(page, 0, BUTTON.a);
   await screenIs(page, 'race');
+  await hold(page, 3, []);
+  await press(page, 3, BUTTON.start);
+  await page.waitForTimeout(300);
+  await screenIs(page, 'race');
   await press(page, 1, BUTTON.start);
   await screenIs(page, 'pause');
+  assert.equal(await text(page, '.title'), 'P2 paused');
   await press(page, 0, BUTTON.b);
   await page.waitForTimeout(300);
   await screenIs(page, 'pause');

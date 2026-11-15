@@ -5,17 +5,21 @@ const BOT_COLORS = [0xb06bff, 0xff8c2e, 0x35d6c8, 0xff7ac8, 0x9aa3ad];
 // A slot holds the gamepad index of the player who joined it.
 export const createSlots = () => PLAYER_COLORS.map((color) => ({ color, joined: false, pad: null, assist: false }));
 
+// Frees the slots of players whose pads are gone. Returns whether any slot was freed.
+export function dropMissing(slots, pads) {
+  const gone = slots.filter((slot) => slot.joined && !pads.has(slot.pad));
+  for (const slot of gone) slot.joined = false;
+  return gone.length > 0;
+}
+
 // Applies one frame of presses to the join screen.
 // Returns 'hub' or 'start' when a player asks to leave the screen, 'changed' when a slot changed, else null.
 export function updateLobby(slots, pads) {
-  let outcome = null;
+  let outcome = dropMissing(slots, pads) ? 'changed' : null;
   const change = (slot, fields) => {
     Object.assign(slot, fields);
     outcome = 'changed';
   };
-  for (const slot of slots) {
-    if (slot.joined && !pads.has(slot.pad)) change(slot, { joined: false });
-  }
   for (const [index, pad] of pads) {
     const slot = slots.find((s) => s.joined && s.pad === index);
     const free = slots.find((s) => !s.joined);

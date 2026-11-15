@@ -1,5 +1,5 @@
 import { IDLE, stepVehicle } from './physics.js';
-import { locate, pointAt, wrap, wrapDelta } from './track.js';
+import { angleDiff, locate, pointAt, wrap, wrapDelta } from './track.js';
 
 export const COUNTDOWN = 3;
 const RACER_RADIUS = 1.6;
@@ -11,6 +11,8 @@ const CATCH_UP = 0.1;
 const BOX_RESPAWN = 4;
 const SPIN_TIME = 1.2;
 const STRAGGLER_GRACE = 30;
+// A racer against the wall turns to face along the track at this rate, per second.
+const WALL_TURN = 3;
 
 const BOX_ROWS = [0.12, 0.37, 0.62, 0.87];
 const PAD_SPOTS = [0.25, 0.5, 0.75];
@@ -140,6 +142,9 @@ function moveRacer(race, racer, input, dt) {
     racer.x -= t.z * excess;
     racer.z += t.x * excess;
     racer.speed *= 1 - Math.min(1, 1.5 * dt);
+    const along = Math.atan2(t.x, t.z);
+    racer.heading += angleDiff(along, racer.heading) * Math.min(1, WALL_TURN * dt);
+    racer.slide += angleDiff(along, racer.slide) * Math.min(1, WALL_TURN * dt);
     spot = locate(track, racer.x, racer.z, spot.index);
   }
   racer.dist += wrapDelta(spot.s - racer.s, track.n);

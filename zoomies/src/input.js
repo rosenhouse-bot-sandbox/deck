@@ -41,6 +41,15 @@ export function readPad(gamepad, previous = null) {
   };
 }
 
+// Wraps a screen's `update(pads, dt)` so that it ignores input for its first `seconds`.
+export function after(seconds, update) {
+  let shown = 0;
+  return (pads, dt) => {
+    shown += dt;
+    if (shown > seconds) update(pads, dt);
+  };
+}
+
 export function createPads(getGamepads = () => navigator.getGamepads()) {
   let previous = new Map();
   return {

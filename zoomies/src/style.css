@@ -78,6 +78,7 @@ canvas,
 .controls {
   position: absolute;
   bottom: 10vh;
+  white-space: pre;
 }
 
 .arrows,
@@ -113,11 +114,10 @@ canvas,
 }
 
 .banner {
-  position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 9em;
+  font-size: 7em;
   color: #ffe14d;
 }
 

@@ -47,10 +47,10 @@ export function showSelect(root, levels, index, laps) {
   element(page, 'footer', 'A: race!   B: back');
 }
 
-export function showPause(root) {
+export function showPause(root, pauser) {
   const page = screen(root, 'pause');
-  element(page, 'title', 'Paused');
-  element(page, 'footer', 'A: keep racing   B: quit race');
+  element(page, 'title', `${pauser} paused`);
+  element(page, 'footer', `${pauser}:   A: keep racing   B: quit race`);
 }
 
 export function showResults(root, race) {
@@ -71,7 +71,6 @@ export function showResults(root, race) {
 export function createHud(root, race, rects) {
   root.replaceChildren();
   document.body.dataset.screen = 'race';
-  const banner = element(root, 'banner');
   const panels = race.racers
     .filter((racer) => racer.human)
     .map((racer, i) => {
@@ -82,6 +81,7 @@ export function createHud(root, race, rects) {
       panel.style.setProperty('--player', css(racer.color));
       return {
         racer,
+        banner: element(panel, 'banner'),
         place: element(panel, 'place-badge'),
         lap: element(panel, 'lap'),
         speed: element(panel, 'speed'),
@@ -101,8 +101,8 @@ export function createHud(root, race, rects) {
 
   return {
     update(pads) {
-      banner.textContent = race.phase === 'countdown' ? Math.ceil(race.countdown) : race.time < 1 ? 'GO!' : '';
-      for (const { racer, place, lap, speed, item, notice } of panels) {
+      for (const { racer, banner, place, lap, speed, item, notice } of panels) {
+        banner.textContent = race.phase === 'countdown' ? Math.ceil(race.countdown) : race.time < 1 ? 'GO!' : '';
         place.textContent = ordinal(racer.place);
         lap.textContent = `Lap ${lapOf(race, racer)}/${race.laps}`;
         speed.textContent = `${Math.round(Math.abs(racer.speed) * 3.6)} km/h`;
