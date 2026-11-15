@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
     paths: [zoomies/**, .github/workflows/zoomies.yaml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: zoomies-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 defaults:
   run:
     working-directory: zoomies
@@ -24,3 +30,32 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zoomies
+          path: zoomies/dist
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: zoomies
+          path: _site/zoomies
+      - name: Send the site root to the game. The hub page will replace this.
+        run: echo '<meta http-equiv="refresh" content="0; url=zoomies/">' > _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

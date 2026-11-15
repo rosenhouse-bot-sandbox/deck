@@ -5,7 +5,8 @@ export const COUNTDOWN = 3;
 const RACER_RADIUS = 1.6;
 const PICKUP_RADIUS = 2.8;
 const HIT_RADIUS = 2.6;
-const BOOST_FACTOR = 1.5;
+const BOOST_TOP_SPEED = 1.5;
+const BOOST_THRUST = 2;
 const CATCH_UP = 0.1;
 const BOX_RESPAWN = 4;
 const SPIN_TIME = 1.2;
@@ -30,7 +31,7 @@ export function createRace({ track, level, entrants, laps = 3, rng = Math.random
       speed: 0,
       index: wrap(s, track.n),
       s: wrap(s, track.n),
-      // Samples travelled since the start line; negative on the grid.
+      // `dist` counts samples travelled since the start line. It is negative on the grid.
       dist: s - track.n,
       offset: lane,
       lane: lane + (rng() - 0.5) * 4,
@@ -53,11 +54,6 @@ export function createRace({ track, level, entrants, laps = 3, rng = Math.random
       return { x: p.x, z: p.z, s: fraction * track.n, respawn: 0 };
     }),
   );
-  const pads = PAD_SPOTS.map((fraction, i) => ({
-    s: fraction * track.n,
-    offset: (i % 2 ? -1 : 1) * level.halfWidth * 0.4,
-  }));
-
   return {
     track,
     level,
@@ -65,7 +61,7 @@ export function createRace({ track, level, entrants, laps = 3, rng = Math.random
     rng,
     racers,
     boxes,
-    pads,
+    pads: padsFor(track, level),
     goo: [],
     balls: [],
     phase: 'countdown',
@@ -75,6 +71,9 @@ export function createRace({ track, level, entrants, laps = 3, rng = Math.random
     events: [],
   };
 }
+
+export const padsFor = (track, level) =>
+  PAD_SPOTS.map((fraction, i) => ({ s: fraction * track.n, offset: (i % 2 ? -1 : 1) * level.halfWidth * 0.4 }));
 
 export const lapOf = (race, racer) => Math.min(race.laps, Math.max(1, Math.floor(racer.dist / race.track.n) + 1));
 
@@ -111,6 +110,7 @@ function useItem(race, racer) {
     race.goo.push({
       x: racer.x - Math.sin(racer.heading) * 4,
       z: racer.z - Math.cos(racer.heading) * 4,
+      s: racer.s,
       ttl: 25,
     });
   }
@@ -128,9 +128,9 @@ function moveRacer(race, racer, input, dt) {
   }
 
   const catchUp = race.racers.length > 1 ? (CATCH_UP * (racer.place - 1)) / (race.racers.length - 1) : 0;
-  const factor =
-    racer.skill * (1 + catchUp) * (racer.boost > 0 ? BOOST_FACTOR : 1) * (racer.offroad ? level.offroad : 1);
-  stepVehicle(racer, racer.spin > 0 ? IDLE : input, level.handling, dt, factor);
+  const boosting = racer.boost > 0;
+  const topSpeed = racer.skill * (1 + catchUp) * (boosting ? BOOST_TOP_SPEED : 1) * (racer.offroad ? level.offroad : 1);
+  stepVehicle(racer, racer.spin > 0 ? IDLE : input, level.handling, dt, { topSpeed, thrust: boosting ? BOOST_THRUST : 1 });
 
   let spot = locate(track, racer.x, racer.z, racer.index);
   const limit = level.halfWidth + level.shoulder;
@@ -255,6 +255,7 @@ export function stepRace(race, inputs, dt) {
   rank(race);
 
   const humans = race.racers.filter((r) => r.human);
+  const awaited = humans.length ? humans : race.racers;
   const waitedEnough = race.firstHumanFinish !== null && race.time - race.firstHumanFinish > STRAGGLER_GRACE;
-  if (humans.every((r) => r.finished) || waitedEnough) race.phase = 'finished';
+  if (awaited.every((r) => r.finished) || waitedEnough) race.phase = 'finished';
 }

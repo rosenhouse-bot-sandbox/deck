@@ -1,6 +1,6 @@
 export const wrap = (i, n) => ((i % n) + n) % n;
 
-// Shortest signed difference on a loop of length n.
+// Returns the shortest signed difference on a loop of length n.
 export const wrapDelta = (d, n) => wrap(d + n / 2, n) - n / 2;
 
 export const angleDiff = (a, b) => wrapDelta(a - b, Math.PI * 2);
@@ -11,7 +11,7 @@ function catmullRom(p0, p1, p2, p3, t) {
   return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3);
 }
 
-// A closed loop through `points`, resampled to `samples` evenly spaced centres.
+// Builds a closed loop through `points`, resampled to `samples` evenly spaced centres.
 // Distances along the track are measured in samples.
 export function buildTrack(points, samples = 600) {
   const perSegment = 40;
@@ -56,9 +56,9 @@ export function buildTrack(points, samples = 600) {
   return { n: samples, pos, tan, length, spacing: length / samples };
 }
 
-// Where (x, z) sits relative to the track: `s` is the distance along it,
+// Finds where (x, z) sits on the track: `s` is the distance along it,
 // `offset` is the distance left of the centre line.
-// A `hint` keeps the search local, so nearby stretches of track cannot steal the racer.
+// A `hint` limits the search to samples near that index.
 export function locate(track, x, z, hint = null, window = 40) {
   let index = -1;
   let nearest = Infinity;

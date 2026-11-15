@@ -1,7 +1,7 @@
 import { lapOf } from './race.js';
 import { angleDiff } from './track.js';
 
-export const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][n % 10 > 3 || Math.floor(n / 10) === 1 ? 0 : n % 10]}`;
+const ordinal = (place) => `${place}${['st', 'nd', 'rd'][place - 1] ?? 'th'}`;
 
 const ITEM_LABELS = { turbo: 'TURBO', shield: 'SHIELD', goo: 'GOO', ball: 'BALL' };
 const css = (color) => `#${color.toString(16).padStart(6, '0')}`;
@@ -67,7 +67,7 @@ export function showResults(root, race) {
   element(page, 'footer', 'A: next race');
 }
 
-// One panel per human racer, laid over that racer's part of the screen.
+// Lays one panel per human racer over that racer's part of the screen.
 export function createHud(root, race, rects) {
   root.replaceChildren();
   document.body.dataset.screen = 'race';
@@ -90,19 +90,25 @@ export function createHud(root, race, rects) {
       };
     });
 
+  const noticeFor = (racer, pads) => {
+    const { tan } = race.track;
+    const along = Math.atan2(tan[racer.index].x, tan[racer.index].z);
+    if (racer.finished) return `Finished ${ordinal(racer.place)}!`;
+    if (!pads.has(racer.pad)) return 'Controller lost';
+    if (racer.speed > 5 && Math.abs(angleDiff(racer.slide, along)) > 2) return 'Turn around! (Y)';
+    return '';
+  };
+
   return {
-    update() {
+    update(pads) {
       banner.textContent = race.phase === 'countdown' ? Math.ceil(race.countdown) : race.time < 1 ? 'GO!' : '';
       for (const { racer, place, lap, speed, item, notice } of panels) {
-        const { tan } = race.track;
-        const along = Math.atan2(tan[racer.index].x, tan[racer.index].z);
-        const wrongWay = racer.speed > 5 && Math.abs(angleDiff(racer.slide, along)) > 2;
         place.textContent = ordinal(racer.place);
         lap.textContent = `Lap ${lapOf(race, racer)}/${race.laps}`;
         speed.textContent = `${Math.round(Math.abs(racer.speed) * 3.6)} km/h`;
         item.textContent = racer.item ? `${ITEM_LABELS[racer.item]} (X)` : '';
         item.dataset.item = racer.item ?? '';
-        notice.textContent = racer.finished ? `Finished ${ordinal(racer.place)}!` : wrongWay ? 'Turn around! (Y)' : '';
+        notice.textContent = noticeFor(racer, pads);
       }
     },
   };

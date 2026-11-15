@@ -1,64 +1,48 @@
-import { assisted, botInput } from './ai.js';
 import { createAudio } from './audio.js';
+import { createDriver } from './drive.js';
 import { createPads } from './input.js';
 import { viewports } from './layout.js';
 import { LEVELS, trackFor } from './levels.js';
-import { createRace, stepRace } from './race.js';
+import { createSlots, entrantsFor, updateLobby } from './lobby.js';
+import { createRace } from './race.js';
 import { createHud, showJoin, showPause, showResults, showSelect } from './ui.js';
 import { createBackdrop, createRaceView, createRenderer } from './view.js';
 
 const HUB_URL = '../';
-const STEP = 1 / 60;
-const GRID_SIZE = 6;
 const MAX_LAPS = 5;
-const PLAYER_COLORS = [0xff4d4d, 0x3d8bff, 0xffd23d, 0x4ddb6a];
-const BOT_COLORS = [0xb06bff, 0xff8c2e, 0x35d6c8, 0xff7ac8, 0x9aa3ad];
+// A is also the throttle, so the results ignore it at first.
+const RESULTS_HOLD = 1.5;
 
 const renderer = createRenderer(document.querySelector('canvas'));
 const root = document.querySelector('#ui');
 const pads = createPads();
 const audio = createAudio();
+const slots = createSlots();
 
-// A slot holds the gamepad index of the player who joined it.
-const slots = PLAYER_COLORS.map((color) => ({ color, joined: false, pad: null, assist: false }));
 let levelIndex = 0;
 let laps = 3;
 let backdrop = null;
+// `session` is the race in progress, or null in the menus.
 let session = null;
+// `update(pads, dt)` handles one frame of the current screen.
 let update = null;
 
 const anyPressed = (input, button) => [...input.values()].some((pad) => pad.pressed[button]);
-const joined = () => slots.filter((slot) => slot.joined);
 
-function showBackdrop() {
-  const level = LEVELS[levelIndex];
-  backdrop = createBackdrop(level, trackFor(level));
+function leaveRace() {
+  session?.view.dispose();
+  session = null;
+  backdrop = createBackdrop(LEVELS[levelIndex]);
 }
 
 function enterJoin() {
-  session = null;
-  showBackdrop();
+  leaveRace();
   showJoin(root, slots);
   update = (input) => {
-    let changed = false;
-    for (const [index, pad] of input) {
-      const slot = slots.find((s) => s.joined && s.pad === index);
-      if (!slot && pad.pressed.a) {
-        const free = slots.find((s) => !s.joined);
-        if (free) Object.assign(free, { joined: true, pad: index, assist: false });
-        changed = true;
-      } else if (slot && pad.pressed.b) {
-        slot.joined = false;
-        changed = true;
-      } else if (slot && pad.pressed.x) {
-        slot.assist = !slot.assist;
-        changed = true;
-      } else if (slot && pad.pressed.start) {
-        return enterSelect();
-      }
-      if (pad.pressed.y) location.href = HUB_URL;
-    }
-    if (changed) {
+    const outcome = updateLobby(slots, input);
+    if (outcome === 'hub') location.href = HUB_URL;
+    if (outcome === 'start') return enterSelect();
+    if (outcome === 'changed') {
       audio.play('menu');
       showJoin(root, slots);
     }
@@ -66,8 +50,7 @@ function enterJoin() {
 }
 
 function enterSelect() {
-  session = null;
-  showBackdrop();
+  leaveRace();
   showSelect(root, LEVELS, levelIndex, laps);
   update = (input) => {
     const turn = (anyPressed(input, 'right') ? 1 : 0) - (anyPressed(input, 'left') ? 1 : 0);
@@ -78,7 +61,7 @@ function enterSelect() {
       levelIndex = (levelIndex + turn + LEVELS.length) % LEVELS.length;
       laps = Math.max(1, Math.min(MAX_LAPS, laps + more));
       audio.play('menu');
-      if (turn) showBackdrop();
+      backdrop = createBackdrop(LEVELS[levelIndex]);
       showSelect(root, LEVELS, levelIndex, laps);
     }
   };
@@ -86,73 +69,55 @@ function enterSelect() {
 
 function enterRace() {
   const level = LEVELS[levelIndex];
-  const track = trackFor(level);
-  const humans = joined().map((slot) => ({
-    human: true,
-    name: `P${slots.indexOf(slot) + 1}`,
-    color: slot.color,
-    pad: slot.pad,
-    assist: slot.assist,
-  }));
-  const bots = BOT_COLORS.slice(0, GRID_SIZE - humans.length).map((color, i) => ({
-    human: false,
-    name: `Bot ${i + 1}`,
-    color,
-    skill: 0.86 + 0.03 * i,
-  }));
-  const race = createRace({ track, level, entrants: [...humans, ...bots], laps });
-  const rects = viewports(humans.length);
-  session = { race, track, rects, view: createRaceView(level, track, race), hud: null, carry: 0 };
+  const entrants = entrantsFor(slots);
+  const race = createRace({ track: trackFor(level), level, entrants, laps });
+  session = {
+    race,
+    rects: viewports(entrants.filter((entrant) => entrant.human).length),
+    view: createRaceView(race),
+    advance: createDriver(race),
+  };
   resumeRace();
 }
 
 function resumeRace() {
-  const { race, track, rects } = session;
-  session.hud = createHud(root, race, rects);
+  const { race, rects, advance } = session;
+  const hud = createHud(root, race, rects);
   update = (input, dt) => {
-    if (anyPressed(input, 'start')) return enterPause();
-    session.carry = Math.min(session.carry + dt, STEP * 5);
-    for (let first = true; session.carry >= STEP; session.carry -= STEP, first = false) {
-      const inputs = {};
-      for (const racer of race.racers) {
-        const bot = botInput(racer, track);
-        const pad = input.get(racer.pad);
-        if (!racer.human || racer.finished) inputs[racer.id] = bot;
-        else if (pad) {
-          // A press counts once, however many steps this frame takes.
-          const drive = { steer: pad.steer, throttle: pad.throttle, brake: pad.brake, use: first && pad.pressed.x, reset: first && pad.pressed.y };
-          inputs[racer.id] = racer.assist ? assisted(drive, bot) : drive;
-        }
-      }
-      stepRace(race, inputs, STEP);
-      for (const event of race.events) {
-        if (event.racer && !event.racer.human) continue;
-        audio.play(event.type);
-        if (event.type === 'hit') pads.rumble(event.racer.pad);
-      }
-      if (race.phase === 'finished') return enterResults();
+    const pauser = [...input].find(([, pad]) => pad.pressed.start);
+    if (pauser) return enterPause(pauser[0]);
+    for (const event of advance(input, dt)) {
+      if (event.racer && !event.racer.human) continue;
+      audio.play(event.type);
+      if (event.type === 'hit') pads.rumble(event.racer.pad);
     }
-    session.hud.update();
+    if (race.phase === 'finished') return enterResults();
+    hud.update(input);
   };
 }
 
-function enterPause() {
+// Only the player who paused can resume or quit, so a brake press elsewhere does not end the race.
+function enterPause(pauser) {
   showPause(root);
   update = (input) => {
-    if (anyPressed(input, 'a') || anyPressed(input, 'start')) return resumeRace();
-    if (anyPressed(input, 'b')) return enterSelect();
+    const pad = input.get(pauser);
+    if (!pad || pad.pressed.a || pad.pressed.start) return resumeRace();
+    if (pad.pressed.b) return enterSelect();
   };
 }
 
 function enterResults() {
   showResults(root, session.race);
-  update = (input) => {
-    if (anyPressed(input, 'a')) enterSelect();
+  let shown = 0;
+  update = (input, dt) => {
+    shown += dt;
+    if (shown > RESULTS_HOLD && anyPressed(input, 'a')) enterSelect();
   };
 }
 
 let last = performance.now();
 function frame(now) {
+  requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   update(pads.poll(), dt);
@@ -162,7 +127,6 @@ function frame(now) {
   } else {
     backdrop.render(renderer, now / 1000);
   }
-  requestAnimationFrame(frame);
 }
 
 enterJoin();

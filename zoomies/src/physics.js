@@ -2,12 +2,11 @@ import { angleDiff } from './track.js';
 
 export const IDLE = { steer: 0, throttle: 0, brake: 0 };
 
-// Arcade handling: the vehicle turns on the spot and its travel direction
-// catches up with its heading at the `grip` rate. Positive steer turns right.
-export function stepVehicle(v, input, handling, dt, speedFactor = 1) {
-  const cap = handling.maxSpeed * speedFactor;
-  const boosting = speedFactor > 1 ? 2 : 1;
-  v.speed += handling.accel * boosting * input.throttle * dt;
+// The vehicle turns on the spot and its travel direction catches up with its heading at the `grip` rate.
+// Positive steer turns right.
+export function stepVehicle(v, input, handling, dt, { topSpeed = 1, thrust = 1 } = {}) {
+  const cap = handling.maxSpeed * topSpeed;
+  v.speed += handling.accel * thrust * input.throttle * dt;
   v.speed -= (v.speed > 0 ? handling.brake : handling.accel * 0.6) * input.brake * dt;
   if (!input.throttle && !input.brake) {
     v.speed -= Math.sign(v.speed) * Math.min(Math.abs(v.speed), handling.coast * dt);

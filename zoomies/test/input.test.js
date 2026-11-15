@@ -26,6 +26,19 @@ describe('readPad', () => {
     expect(readPad(gamepad({ buttons: { 15: 1 } })).steer).toBe(1);
   });
 
+  it('ignores a trigger that does not quite spring back', () => {
+    expect(readPad(gamepad({ buttons: { 7: 0.03, 6: 0.03 } }))).toMatchObject({ throttle: 0, brake: 0 });
+  });
+
+  it('caps a stick that reports more than full deflection', () => {
+    expect(readPad(gamepad({ axes: [1.2, 0] })).steer).toBe(1);
+    expect(readPad(gamepad({ axes: [-1.2, 0] })).steer).toBe(-1);
+  });
+
+  it('uses a power-up with X or either bumper', () => {
+    for (const button of [2, 4, 5]) expect(readPad(gamepad({ buttons: { [button]: 1 } })).pressed.x).toBe(true);
+  });
+
   it('reports a press once, until the button is released', () => {
     const first = readPad(gamepad({ buttons: { 2: 1 } }));
     expect(first.pressed.x).toBe(true);
@@ -36,17 +49,26 @@ describe('readPad', () => {
   });
 
   it('treats a flick of the stick as a d-pad press in menus', () => {
-    expect(readPad(gamepad({ axes: [-0.9, 0] })).pressed.left).toBe(true);
-    expect(readPad(gamepad({ axes: [0, 0.9] })).pressed.down).toBe(true);
+    expect(readPad(gamepad({ axes: [-0.9, 0] })).pressed).toMatchObject({ left: true, right: false });
+    expect(readPad(gamepad({ axes: [0.9, 0] })).pressed).toMatchObject({ left: false, right: true });
+    expect(readPad(gamepad({ axes: [0, 0.9] })).pressed).toMatchObject({ down: true, up: false });
+    expect(readPad(gamepad({ axes: [0, -0.9] })).pressed).toMatchObject({ down: false, up: true });
+    expect(readPad(gamepad({ axes: [0.5, 0.5] })).pressed).toMatchObject({ right: false, down: false });
   });
 });
 
 describe('createPads', () => {
   it('polls connected pads by index and remembers what was held', () => {
-    let pads = [null, gamepad({ index: 1, buttons: { 9: 1 } }), { index: 2, connected: false }];
+    const held = gamepad({ index: 1, buttons: { 9: 1 } });
+    let pads = [null, held, { index: 2, connected: false }];
     const reader = createPads(() => pads);
     expect([...reader.poll().keys()]).toEqual([1]);
     expect(reader.poll().get(1).pressed.start).toBe(false);
+
+    pads = [];
+    reader.poll();
+    pads = [null, held];
+    expect(reader.poll().get(1).pressed.start).toBe(true);
   });
 });
 

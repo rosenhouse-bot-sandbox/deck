@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { padsFor } from './race.js';
 import { pointAt } from './track.js';
 
 const THEMES = {
@@ -13,7 +14,8 @@ const WATER_LEVEL = 0;
 const ROAD_LIFT = 0.3;
 const KERB = 1.2;
 
-function seededRandom(seed) {
+function seededRandom(text) {
+  let seed = [...text].reduce((hash, character) => hash * 31 + character.charCodeAt(0), 7) | 0;
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -22,8 +24,8 @@ function seededRandom(seed) {
   };
 }
 
-// A strip of quads along the track between samples `from` and `to`,
-// one quad per sample for each pair of neighbouring `offsets`.
+// Builds a strip of quads along the track between samples `from` and `to`,
+// with one quad per sample for each pair of neighbouring `offsets`.
 // `colorAt(row, column)` returns a hex colour, or null to leave a gap.
 function ribbon(track, { from = 0, to = track.n, offsets, yAt, colorAt }) {
   const positions = [];
@@ -53,7 +55,7 @@ function ribbon(track, { from = 0, to = track.n, offsets, yAt, colorAt }) {
   return geometry;
 }
 
-// Instanced copies of a prop made of several parts.
+// Adds instanced copies of a prop made of several parts.
 // `spots` are { x, y, z, scale, turn }.
 function scatter(scene, parts, spots) {
   const base = new THREE.Matrix4();
@@ -106,7 +108,7 @@ const PROPS = {
     { geometry: ball(1.6), color: 0xffffff, at: [0, 1.4, 0] },
     { geometry: ball(1.1), color: 0xffffff, at: [0, 3.5, 0] },
     { geometry: ball(0.75), color: 0xffffff, at: [0, 5, 0] },
-    { geometry: new THREE.ConeGeometry(0.2, 1, 6), color: 0xff8c1a, at: [0, 5, 0.9], stretch: [1, 1, 1] },
+    { geometry: new THREE.ConeGeometry(0.2, 1, 6), color: 0xff8c1a, at: [0, 5, 0.9] },
     { geometry: cylinder(0.6, 0.6, 0.9), color: 0x333333, at: [0, 6, 0] },
   ],
   asteroid: [{ geometry: blob(5), color: 0x8b7fa8, at: [0, 0, 0], stretch: [1.2, 0.9, 1] }],
@@ -142,7 +144,7 @@ function addGround(scene, level, theme, random) {
 function addSpace(scene, random) {
   const stars = [];
   for (let i = 0; i < 2500; i++) {
-    const v = new THREE.Vector3().randomDirection().multiplyScalar(900);
+    const v = new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5).setLength(900);
     stars.push(v.x, v.y, v.z);
   }
   const geometry = new THREE.BufferGeometry();
@@ -199,7 +201,7 @@ function addGantry(scene, track, level, yAt) {
 // Builds the scenery for a level. `groundY(x, z, s)` is the height a racer rides at.
 export function buildWorld(level, track) {
   const theme = THEMES[level.id];
-  const random = seededRandom(level.id.length * 7919);
+  const random = seededRandom(level.id);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(theme.sky);
   if (theme.fog) scene.fog = new THREE.Fog(theme.sky, theme.fog * 0.45, theme.fog);
@@ -275,7 +277,6 @@ export function buildWorld(level, track) {
   scene.add(
     new THREE.Mesh(
       ribbon(track, {
-        from: 0,
         to: 2,
         offsets: Array.from({ length: columns + 1 }, (_, i) => -hw + (i * 2 * hw) / columns),
         yAt: lifted(ROAD_LIFT + 0.05),
@@ -285,6 +286,22 @@ export function buildWorld(level, track) {
     ),
   );
   addGantry(scene, track, level, lifted(0));
+
+  const padMaterial = new THREE.MeshBasicMaterial({ vertexColors: true });
+  for (const pad of padsFor(track, level)) {
+    scene.add(
+      new THREE.Mesh(
+        ribbon(track, {
+          from: Math.round(pad.s) - 3,
+          to: Math.round(pad.s) + 3,
+          offsets: [pad.offset - 3, pad.offset, pad.offset + 3],
+          yAt: lifted(ROAD_LIFT + 0.08),
+          colorAt: (row) => (row % 2 ? 0xffe14d : 0xff7a1a),
+        }),
+        padMaterial,
+      ),
+    );
+  }
 
   const clearance = hw + level.shoulder + 7;
   const clear = (x, z, margin) => track.pos.every((p, i) => i % 3 || (p.x - x) ** 2 + (p.z - z) ** 2 > (clearance + margin) ** 2);
@@ -305,26 +322,6 @@ export function buildWorld(level, track) {
     scene,
     groundY,
     water,
-    lifted,
     update: (time) => animated.forEach((animate) => animate(time)),
   };
-}
-
-// A glowing strip for each boost pad.
-export function addPads(world, track, pads) {
-  const material = new THREE.MeshBasicMaterial({ vertexColors: true });
-  for (const pad of pads) {
-    world.scene.add(
-      new THREE.Mesh(
-        ribbon(track, {
-          from: Math.round(pad.s) - 3,
-          to: Math.round(pad.s) + 3,
-          offsets: [pad.offset - 3, pad.offset, pad.offset + 3],
-          yAt: world.lifted(ROAD_LIFT + 0.08),
-          colorAt: (row) => (row % 2 ? 0xffe14d : 0xff7a1a),
-        }),
-        material,
-      ),
-    );
-  }
 }

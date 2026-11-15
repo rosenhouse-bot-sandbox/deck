@@ -1,6 +1,7 @@
-// Button indices of the standard Gamepad API mapping, as an Xbox pad reports them.
+// These are the button indices of the standard Gamepad API mapping, as an Xbox pad reports them.
 const BUTTON = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, start: 9, up: 12, down: 13, left: 14, right: 15 };
 const DEADZONE = 0.15;
+const TRIGGER_DEADZONE = 0.05;
 const STICK_AS_DPAD = 0.6;
 
 function held(gamepad) {
@@ -26,28 +27,30 @@ export function readPad(gamepad, previous = null) {
   const pressed = {};
   for (const name of Object.keys(now)) pressed[name] = now[name] && !previous?.held[name];
   const stick = gamepad.axes[0] ?? 0;
-  const dpad = (now.right && Math.abs(stick) < DEADZONE ? 1 : 0) - (now.left && Math.abs(stick) < DEADZONE ? 1 : 0);
+  const dpad = (now.right ? 1 : 0) - (now.left ? 1 : 0);
+  const trigger = (name) => {
+    const value = gamepad.buttons[BUTTON[name]]?.value ?? 0;
+    return value < TRIGGER_DEADZONE ? 0 : value;
+  };
   return {
     held: now,
     pressed,
     steer: Math.abs(stick) < DEADZONE ? dpad : Math.max(-1, Math.min(1, stick)),
-    throttle: Math.max(gamepad.buttons[BUTTON.rt]?.value ?? 0, now.a ? 1 : 0),
-    brake: Math.max(gamepad.buttons[BUTTON.lt]?.value ?? 0, now.b ? 1 : 0),
+    throttle: Math.max(trigger('rt'), now.a ? 1 : 0),
+    brake: Math.max(trigger('lt'), now.b ? 1 : 0),
   };
 }
 
 export function createPads(getGamepads = () => navigator.getGamepads()) {
-  const previous = new Map();
+  let previous = new Map();
   return {
-    // One entry per connected pad, keyed by its index.
+    // Returns the state of each connected pad, keyed by its index.
     poll() {
       const pads = new Map();
       for (const gamepad of getGamepads()) {
-        if (!gamepad?.connected) continue;
-        const state = readPad(gamepad, previous.get(gamepad.index));
-        pads.set(gamepad.index, state);
-        previous.set(gamepad.index, state);
+        if (gamepad?.connected) pads.set(gamepad.index, readPad(gamepad, previous.get(gamepad.index)));
       }
+      previous = pads;
       return pads;
     },
     rumble(index, strength = 0.7, duration = 250) {

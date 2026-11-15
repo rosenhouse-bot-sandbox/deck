@@ -41,6 +41,20 @@ describe('buildTrack', () => {
   });
 });
 
+describe('heights', () => {
+  it('follow the terrain on the ground and the control points in the sky', () => {
+    const dunes = LEVELS.find((level) => level.id === 'dunes');
+    const { x, y, z } = trackFor(dunes).pos[40];
+    expect(y).toBe(dunes.terrain(x, z));
+    expect(y).not.toBe(0);
+
+    const sky = trackFor(LEVELS.find((level) => level.id === 'stars'));
+    const [a, b] = [sky.pos[100].y, sky.pos[101].y];
+    expect(a).not.toBeCloseTo(b, 3);
+    expect(pointAt(sky, 100.25).y).toBeCloseTo(a + (b - a) * 0.25);
+  });
+});
+
 describe('wrapDelta', () => {
   it('takes the short way round', () => {
     expect(wrapDelta(598 - 2, 600)).toBe(-4);

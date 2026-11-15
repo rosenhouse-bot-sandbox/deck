@@ -72,6 +72,50 @@ describe('laps', () => {
     expect(lapOf(race, racer)).toBe(1);
   });
 
+  it('shows the lap being driven, up to the last one', () => {
+    const race = start();
+    const racer = race.racers[0];
+    racer.dist = track.n + 5;
+    expect(lapOf(race, racer)).toBe(2);
+    racer.dist = 3 * track.n + 5;
+    expect(lapOf(race, racer)).toBe(3);
+  });
+});
+
+describe('finishing', () => {
+  const nearFinish = (race, racer, samplesToGo) => {
+    racer.dist = race.laps * track.n - samplesToGo;
+    place(racer, track.n - samplesToGo);
+  };
+
+  it('ranks finishers by finish time, ahead of everyone still racing', () => {
+    const race = start([{ human: true }, { human: true }, { human: true }], { laps: 1 });
+    const [late, early, never] = race.racers;
+    nearFinish(race, early, 5);
+    nearFinish(race, late, 40);
+    steps(race, 4, (r) => ({ 0: botInput(late, track), 1: botInput(early, track) }));
+    expect(early.finishTime).toBeLessThan(late.finishTime);
+    expect([early.place, late.place, never.place]).toEqual([1, 2, 3]);
+  });
+
+  it('does not start the stragglers clock when a bot finishes', () => {
+    const race = start([{ human: true }, { human: false }], { laps: 1 });
+    nearFinish(race, race.racers[1], 5);
+    steps(race, 32, (r) => ({ 1: botInput(r.racers[1], track) }));
+    expect(race.racers[1].finished).toBe(true);
+    expect(race.phase).toBe('racing');
+  });
+
+  it('ends a race without humans when every bot has finished', () => {
+    const race = start([{ human: false }, { human: false }], { laps: 1 });
+    nearFinish(race, race.racers[0], 5);
+    steps(race, 2, bots);
+    expect(race.phase).toBe('racing');
+    nearFinish(race, race.racers[1], 5);
+    steps(race, 2, bots);
+    expect(race.phase).toBe('finished');
+  });
+
   it('finishes the race when every human has finished', () => {
     const race = start([{ human: true }, { human: false }], { laps: 1 });
     race.racers[0].dist = track.n - 5;
@@ -102,7 +146,25 @@ describe('road', () => {
     steps(race, 6, () => ({ 0: GO }));
     expect(racer.offroad).toBe(true);
     expect(Math.abs(racer.offset)).toBeLessThanOrEqual(level.halfWidth + level.shoulder + 0.01);
-    expect(racer.speed).toBeLessThan(level.handling.maxSpeed * level.offroad + 0.01);
+    // Scraping the wall costs more speed than the rough ground alone.
+    expect(racer.speed).toBeLessThan(level.handling.maxSpeed * level.offroad * 0.8);
+  });
+
+  it('slows racers on the shoulder to the off-road top speed', () => {
+    const race = start();
+    const racer = race.racers[0];
+    place(racer, 100, level.halfWidth + 3);
+    Object.assign(racer, { slide: racer.heading, speed: level.handling.maxSpeed * level.offroad + 10 });
+    steps(race, 0.5, () => ({ 0: GO }));
+    expect(Math.abs(racer.offset)).toBeLessThan(level.halfWidth + level.shoulder - 1);
+    expect(racer.speed).toBeCloseTo(level.handling.maxSpeed * level.offroad, 0);
+  });
+
+  it('leaves a racer without input to coast to a stop', () => {
+    const race = start();
+    race.racers[0].speed = 5;
+    steps(race, 1);
+    expect(race.racers[0].speed).toBe(0);
   });
 
   it('puts a racer back on the centre line on reset', () => {
@@ -110,9 +172,17 @@ describe('road', () => {
     const racer = race.racers[0];
     place(racer, 100, level.halfWidth + 5);
     racer.heading = 1;
-    stepRace(race, { 0: { steer: 0, throttle: 0, brake: 0, reset: true } }, DT);
+    racer.speed = 20;
+    const reset = { 0: { steer: 0, throttle: 0, brake: 0, reset: true } };
+    stepRace(race, reset, DT);
     expect(racer.offset).toBeCloseTo(0, 1);
     expect(racer.heading).toBeCloseTo(pointAt(track, racer.s).heading, 1);
+    expect(racer.speed).toBe(0);
+
+    place(racer, 100, 5);
+    racer.finished = true;
+    stepRace(race, reset, DT);
+    expect(racer.offset).toBeCloseTo(5, 1);
   });
 
   it('pushes overlapping racers apart', () => {
@@ -131,7 +201,8 @@ describe('road', () => {
     place(race.racers[1], 20);
     race.racers[1].dist = 20;
     steps(race, 4, bots);
-    expect(race.racers[1].speed).toBeCloseTo(race.racers[0].speed * 1.1, 0);
+    expect(race.racers[0].speed).toBeCloseTo(level.handling.maxSpeed, 1);
+    expect(race.racers[1].speed).toBeCloseTo(level.handling.maxSpeed * 1.1, 1);
   });
 });
 
@@ -147,13 +218,18 @@ describe('power-ups', () => {
     const [first, second] = race.racers;
     onBox(race, first);
     stepRace(race, {}, DT);
+    expect(race.events).toEqual([{ type: 'pickup', racer: first }]);
     expect(['turbo', 'shield', 'goo', 'ball']).toContain(first.item);
     const held = first.item;
     place(first, 300);
     onBox(race, second);
     stepRace(race, {}, DT);
     expect(second.item).toBeNull();
-    steps(race, 4);
+    steps(race, 3.5);
+    onBox(race, second);
+    stepRace(race, {}, DT);
+    expect(second.item).toBeNull();
+    steps(race, 0.5);
     onBox(race, second);
     stepRace(race, {}, DT);
     expect(second.item).not.toBeNull();
@@ -177,6 +253,58 @@ describe('power-ups', () => {
     place(racer, race.pads[0].s, race.pads[0].offset);
     stepRace(race, {}, DT);
     expect(racer.boost).toBeGreaterThan(1);
+    expect(race.events).toEqual([{ type: 'pad', racer }]);
+    stepRace(race, {}, DT);
+    expect(race.events).toEqual([]);
+  });
+
+  it('cannot use an item while spinning out', () => {
+    const race = start();
+    const racer = race.racers[0];
+    Object.assign(racer, { item: 'turbo', spin: 1 });
+    steps(race, 0.5, () => ({ 0: { ...GO, use: true } }));
+    expect(racer.item).toBe('turbo');
+    steps(race, 1, () => ({ 0: { ...GO, use: true } }));
+    expect(racer.item).toBeNull();
+  });
+
+  it('wears a shield for six seconds', () => {
+    const race = start();
+    const racer = race.racers[0];
+    racer.item = 'shield';
+    stepRace(race, { 0: { ...GO, use: true } }, DT);
+    expect(race.events).toEqual([{ type: 'use', racer, item: 'shield' }]);
+    steps(race, 5.5);
+    expect(racer.shield).toBeGreaterThan(0);
+    steps(race, 1);
+    expect(racer.shield).toBe(0);
+  });
+
+  it('dries up goo after 25 seconds', () => {
+    const race = start();
+    const racer = race.racers[0];
+    place(racer, 100);
+    racer.item = 'goo';
+    stepRace(race, { 0: { ...GO, use: true } }, DT);
+    place(racer, 300);
+    steps(race, 24);
+    expect(race.goo).toHaveLength(1);
+    steps(race, 2);
+    expect(race.goo).toHaveLength(0);
+  });
+
+  it('lets a ball that finds nobody roll away after six seconds, sparing its thrower', () => {
+    const race = start();
+    const racer = race.racers[0];
+    place(racer, 100);
+    racer.item = 'ball';
+    stepRace(race, { 0: { ...GO, use: true } }, DT);
+    const launched = race.balls[0].s;
+    steps(race, 5);
+    expect(race.balls[0].s - launched).toBeCloseTo((level.handling.maxSpeed * 1.8 * 5) / track.spacing, 0);
+    steps(race, 1.5);
+    expect(race.balls).toHaveLength(0);
+    expect(racer.spin).toBe(0);
   });
 
   it('spins out whoever drives into goo, but not through a shield', () => {
@@ -190,7 +318,8 @@ describe('power-ups', () => {
 
     Object.assign(victim, { x: race.goo[0].x, z: race.goo[0].z, index: 100, speed: 20 });
     stepRace(race, {}, DT);
-    expect(victim.spin).toBeGreaterThan(1);
+    expect(race.events).toEqual([{ type: 'hit', racer: victim }]);
+    expect(victim.spin).toBeGreaterThan(1.1);
     expect(race.goo).toHaveLength(0);
     const { heading } = victim;
     steps(race, 0.5, () => ({ 1: { ...GO, steer: 1 } }));
@@ -203,6 +332,7 @@ describe('power-ups', () => {
     stepRace(race, { 2: { ...GO, use: true } }, DT);
     Object.assign(shielded, { x: race.goo[0].x, z: race.goo[0].z, index: 200 });
     stepRace(race, {}, DT);
+    expect(race.events).toEqual([{ type: 'block', racer: shielded }]);
     expect(shielded).toMatchObject({ spin: 0, shield: 0 });
     expect(race.goo).toHaveLength(0);
   });
@@ -219,6 +349,17 @@ describe('power-ups', () => {
     expect(events.find((e) => e.type === 'hit').racer).toBe(target);
     expect(thrower.spin).toBe(0);
     expect(race.balls).toHaveLength(0);
+  });
+
+  it('aims a ball only at racers ahead of it', () => {
+    const race = start([{ human: true }, { human: true }]);
+    const [thrower, behind] = race.racers;
+    place(thrower, 100, 0);
+    place(behind, 90, 8);
+    thrower.item = 'ball';
+    stepRace(race, { 0: { ...GO, use: true } }, DT);
+    stepRace(race, {}, DT);
+    expect(race.balls[0].offset).toBeCloseTo(0, 1);
   });
 
   it('favours turbo for racers at the back', () => {
@@ -252,6 +393,16 @@ describe('bots', () => {
     steps(race, 0.5, bots);
     expect(racer.item).toBeNull();
   });
+
+  it('keep to their own lanes', () => {
+    const race = start([{ human: false }, { human: false }]);
+    const [left, right] = race.racers;
+    left.lane = 6;
+    right.lane = -6;
+    steps(race, 8, bots);
+    expect(left.offset).toBeGreaterThan(3);
+    expect(right.offset).toBeLessThan(-3);
+  });
 });
 
 describe('steering help', () => {
@@ -261,5 +412,9 @@ describe('steering help', () => {
   });
   it('yields to a player who steers hard', () => {
     expect(assisted({ steer: 1 }, bot).steer).toBe(1);
+    expect(assisted({ steer: 0.7 }, bot).steer).toBe(0.7);
+  });
+  it('blends with a player who steers gently', () => {
+    expect(assisted({ steer: 0.4 }, bot).steer).toBeCloseTo(0.4 * 0.6 - 0.8 * 0.4);
   });
 });

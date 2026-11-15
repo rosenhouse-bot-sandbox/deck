@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 
 const lambert = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
-const DARK = lambert(0x22252b);
-const LIGHT = lambert(0xf2f2f2);
-const GLASS = lambert(0x8fd8ff);
+// Every vehicle uses these, so a race must not dispose them.
+const shared = (color) => Object.assign(lambert(color), { userData: { shared: true } });
+const DARK = shared(0x22252b);
+const LIGHT = shared(0xf2f2f2);
+const GLASS = shared(0x8fd8ff);
 
 function part(parent, geometry, material, x, y, z) {
   const mesh = new THREE.Mesh(geometry, material);
@@ -25,7 +27,7 @@ function rider(parent, y, z) {
   part(parent, box(0.6, 0.22, 0.2), DARK, 0, y + 0.95, z + 0.4);
 }
 
-// Every model faces +z and sits on y = 0.
+// Every builder makes a model that faces +z and sits on y = 0.
 const BUILDERS = {
   car(body, paint) {
     part(body, box(1.9, 0.5, 4), paint, 0, 0.6, 0);
@@ -81,10 +83,12 @@ const BUILDERS = {
 };
 
 const HOVER = { ship: 1 };
+const FLAME_HEIGHT = { ship: 1.1 };
 
-// A vehicle group with handles for the parts the view animates.
-export function createVehicle(type, color) {
+// Returns a vehicle group and the parts the view animates.
+export function createVehicle(type, color, { shadow: castsShadow }) {
   const group = new THREE.Group();
+  group.rotation.order = 'YXZ';
   const body = new THREE.Group();
   body.position.y = HOVER[type] ?? 0;
   group.add(body);
@@ -95,7 +99,7 @@ export function createVehicle(type, color) {
     new THREE.ConeGeometry(0.5, 2.6, 8).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0xffb020 }),
     0,
-    type === 'ship' ? 1.1 : 0.8,
+    FLAME_HEIGHT[type] ?? 0.8,
     -3.2,
   );
   const shield = part(
@@ -114,9 +118,10 @@ export function createVehicle(type, color) {
     0.4,
     0,
   );
-  // Seen only by the overview camera.
+  shadow.visible = castsShadow;
+  // Only the overview camera sees layer 1.
   const marker = part(group, new THREE.SphereGeometry(9, 12, 8), new THREE.MeshBasicMaterial({ color }), 0, 14, 0);
   marker.layers.set(1);
 
-  return { group, body, flame, shield, shadow };
+  return { group, body, flame, shield };
 }

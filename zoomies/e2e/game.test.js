@@ -5,17 +5,17 @@ import { chromium } from 'playwright';
 import { BUTTON, hold, installGamepads, press } from './gamepad.js';
 
 const HUB = 'http://localhost:4173/';
-const URL = `${HUB}zoomies/`;
+const GAME = `${HUB}zoomies/`;
 const LEVEL_IDS = ['circuit', 'dunes', 'lagoon', 'peaks', 'stars'];
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort', '--base', '/zoomies/'], { stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) {
-    if (await fetch(URL).then((r) => r.ok, () => false)) break;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
+  const vite = ['node_modules/vite/bin/vite.js', 'preview', '--port', '4173', '--strictPort', '--base', '/zoomies/'];
+  server = spawn(process.execPath, vite, { stdio: 'ignore' });
+  const up = () => fetch(GAME).then((response) => response.ok, () => false);
+  for (let i = 0; i < 50 && !(await up()); i++) await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.ok(await up(), 'the preview server is up');
   browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
 });
 
@@ -30,7 +30,7 @@ async function open() {
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
   await installGamepads(page);
-  await page.goto(URL);
+  await page.goto(GAME);
   await page.waitForSelector('body[data-screen=join]');
   return { page, errors };
 }
@@ -132,9 +132,42 @@ test('a one-lap race with steering help ends on the results, then returns to the
   await page.waitForSelector('body[data-screen=results]', { timeout: 120000 });
   assert.equal(await page.locator('.place').count(), 6);
   assert.match(await text(page, '.place.human .time'), /^\d+\.\d s$/);
+  assert.deepEqual(await page.locator('.rank').allTextContents(), ['1st', '2nd', '3rd', '4th', '5th', '6th']);
+
+  // The throttle is still held, and must not skip the results.
+  await page.waitForTimeout(500);
+  await screenIs(page, 'results');
   await hold(page, 0, []);
-  await press(page, 0, BUTTON.a);
+  for (let i = 0; i < 40 && (await page.locator('body[data-screen=results]').count()); i++) await press(page, 0, BUTTON.a);
   await screenIs(page, 'select');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('only the player who paused can quit the race', async () => {
+  const { page, errors } = await open();
+  await join(page, 2);
+  await press(page, 0, BUTTON.a);
+  await screenIs(page, 'race');
+  await press(page, 1, BUTTON.start);
+  await screenIs(page, 'pause');
+  await press(page, 0, BUTTON.b);
+  await page.waitForTimeout(300);
+  await screenIs(page, 'pause');
+  await press(page, 1, BUTTON.b);
+  await screenIs(page, 'select');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a race goes on with the bot driving when a controller drops out', async () => {
+  const { page, errors } = await open();
+  await join(page, 1);
+  await press(page, 0, BUTTON.a);
+  await screenIs(page, 'race');
+  await page.evaluate(() => navigator.getGamepads().fill(null));
+  await page.waitForFunction(() => document.querySelector('.notice').textContent === 'Controller lost');
+  await page.waitForFunction(() => parseInt(document.querySelector('.speed').textContent) > 40, null, { timeout: 30000 });
   assert.deepEqual(errors, []);
   await page.close();
 });

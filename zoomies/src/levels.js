@@ -1,6 +1,6 @@
 import { buildTrack } from './track.js';
 
-// Radii around the origin, so a loop can never cross itself.
+// Tracks are given as radii around the origin, so a loop can never cross itself.
 function loop(radii, height = () => 0) {
   return radii.map((r, i) => {
     const a = (i / radii.length) * Math.PI * 2;
@@ -79,8 +79,13 @@ export const LEVELS = [
   },
 ];
 
+const tracks = new Map();
+
 export function trackFor(level) {
-  const track = buildTrack(level.points);
-  if (!level.floating) for (const p of track.pos) p.y = level.terrain(p.x, p.z);
-  return track;
+  if (!tracks.has(level.id)) {
+    const track = buildTrack(level.points);
+    if (!level.floating) for (const p of track.pos) p.y = level.terrain(p.x, p.z);
+    tracks.set(level.id, track);
+  }
+  return tracks.get(level.id);
 }

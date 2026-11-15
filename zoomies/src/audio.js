@@ -1,4 +1,4 @@
-// Each sound is a list of [frequency in Hz, duration in seconds] notes.
+// Each sound is a list of notes, given as [frequency in Hz, duration in seconds].
 const SOUNDS = {
   tick: [[440, 0.15]],
   go: [[880, 0.4]],
@@ -20,6 +20,7 @@ export function createAudio() {
       } catch {
         return;
       }
+      context.resume();
       let at = context.currentTime;
       for (const [frequency, duration] of SOUNDS[name]) {
         const oscillator = context.createOscillator();

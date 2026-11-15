@@ -1,6 +1,6 @@
-// Replaces the browser's gamepads with ones the test drives.
 export const BUTTON = { a: 0, b: 1, x: 2, y: 3, rt: 7, start: 9, down: 13, right: 15 };
 
+// Replaces the browser's gamepads with ones the test drives through `window.fakePad`.
 export async function installGamepads(page) {
   await page.addInitScript(() => {
     const pads = [null, null, null, null];
