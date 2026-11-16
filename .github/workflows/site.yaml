@@ -1,0 +1,62 @@
+name: site
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build each game folder into _site
+        run: |
+          mkdir _site
+          for dir in */; do
+            dir=${dir%/}
+            [ "$dir" = hub ] && continue
+            if [ -f "$dir/package.json" ] && jq -e .scripts.build "$dir/package.json" >/dev/null; then
+              (cd "$dir" && npm ci && npm run build)
+              cp -r "$dir/dist" "_site/$dir"
+            elif [ -f "$dir/game.json" ]; then
+              cp -r "$dir" "_site/$dir"
+            fi
+          done
+      - name: Add the hub and its catalog
+        run: |
+          cp -r hub/site/. _site/
+          node hub/catalog.mjs _site
+      - name: Test the hub
+        working-directory: hub
+        run: |
+          npm ci
+          npm test
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    concurrency:
+      group: pages
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
