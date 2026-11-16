@@ -41,7 +41,7 @@ export function createRepeat({ delay = 350, interval = 110 } = {}) {
       return dir;
     }
     if (dir === null || now < next) return null;
-    next += interval;
+    next = now + interval;
     return dir;
   };
 }

@@ -12,24 +12,31 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Build each game folder into _site
+          cache: npm
+          cache-dependency-path: '*/package-lock.json'
+      - name: Install the hub and the browser its tests use
+        working-directory: hub
         run: |
-          mkdir _site
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Test and build each game folder into _site
+        run: |
           for dir in */; do
             dir=${dir%/}
             [ "$dir" = hub ] && continue
-            if [ -f "$dir/package.json" ] && jq -e .scripts.build "$dir/package.json" >/dev/null; then
-              (cd "$dir" && npm ci && npm run build)
-              cp -r "$dir/dist" "_site/$dir"
-            elif [ -f "$dir/game.json" ]; then
-              cp -r "$dir" "_site/$dir"
+            if [ -f "$dir/package.json" ]; then
+              (cd "$dir" && npm ci && npm test --if-present && npm run build && npm run e2e --if-present)
+              mkdir -p _site && cp -r "$dir/dist" "_site/$dir"
+            else
+              mkdir -p _site && cp -r "$dir" "_site/$dir"
             fi
+            [ -f "_site/$dir/game.json" ] || { echo "::error::$dir has no game.json"; exit 1; }
           done
       - name: Add the hub and its catalog
         run: |
@@ -38,9 +45,7 @@ jobs:
       - name: Test the hub
         working-directory: hub
         run: |
-          npm ci
           npm test
-          npx playwright install --with-deps chromium
           npm run e2e
       - uses: actions/upload-pages-artifact@v3
         with:

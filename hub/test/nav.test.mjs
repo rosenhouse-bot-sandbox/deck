@@ -52,6 +52,13 @@ test('repeat moves once, waits, then moves steadily', () => {
   assert.equal(repeat('left', 470), 'left');
 });
 
+test('repeat does not catch up after a stalled frame', () => {
+  const repeat = createRepeat({ delay: 300, interval: 100 });
+  repeat('up', 0);
+  assert.equal(repeat('up', 1000), 'up');
+  assert.equal(repeat('up', 1016), null);
+});
+
 test('buttons ignore a press held since before the page opened', () => {
   const buttons = createButtons();
   assert.deepEqual(buttons(pad({ buttons: [0] })), []);

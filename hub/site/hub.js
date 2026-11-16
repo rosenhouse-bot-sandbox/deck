@@ -27,7 +27,7 @@ function card(game) {
     cover.alt = '';
   } else {
     cover = document.createElement('span');
-    cover.textContent = game.title[0];
+    cover.textContent = [...game.title][0];
   }
   cover.className = 'cover';
   const title = document.createElement('span');
@@ -42,21 +42,26 @@ function card(game) {
 
 const links = () => [...list.querySelectorAll('a')];
 
+// The focused card, or else the one last focused, so that a tap elsewhere does not lose your place.
+function current() {
+  const all = links();
+  if (all.includes(document.activeElement)) return document.activeElement;
+  return all.find((a) => a.getAttribute('href') === remembered()) ?? all[0];
+}
+
+// Focusing a card also scrolls it into view.
 function select(link) {
   link?.focus({ focusVisible: true });
-  link?.scrollIntoView({ block: 'nearest' });
 }
 
 function move(dir) {
   const all = links();
   if (!all.length) return;
-  const from = Math.max(0, all.indexOf(document.activeElement));
-  if (!all.includes(document.activeElement)) return select(all[from]);
-  select(all[neighbor(all.map((a) => a.getBoundingClientRect()), from, dir)]);
+  select(all[neighbor(all.map((a) => a.getBoundingClientRect()), all.indexOf(current()), dir)]);
 }
 
 function play(pad) {
-  const link = links().includes(document.activeElement) ? document.activeElement : links()[0];
+  const link = current();
   if (!link) return;
   pad?.vibrationActuator?.playEffect?.('dual-rumble', { duration: 80, strongMagnitude: 0.3, weakMagnitude: 0.5 })?.catch(() => {});
   location.href = link.href;
@@ -70,7 +75,7 @@ addEventListener('keydown', (e) => {
 });
 
 // One reader per pad index, so each pad's held buttons are tracked separately.
-let readers = new Map();
+const readers = new Map();
 const repeat = createRepeat();
 
 function poll(now) {
@@ -91,7 +96,7 @@ function poll(now) {
 
 // Coming back to a cached page, buttons held from the game must not count.
 addEventListener('pageshow', (e) => {
-  if (e.persisted) readers = new Map();
+  if (e.persisted) readers.clear();
 });
 
 async function load() {
@@ -100,8 +105,7 @@ async function load() {
     if (!response.ok) throw new Error(response.statusText);
     const games = await response.json();
     list.append(...games.map(card));
-    if (!games.length) status.textContent = 'No games yet.';
-    select(links().find((a) => a.getAttribute('href') === remembered()) ?? links()[0]);
+    select(current());
   } catch {
     status.textContent = 'Could not load the list of games.';
   }
