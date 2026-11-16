@@ -1,0 +1,12 @@
+{
+  "name": "hub",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test 'test/*.test.mjs'",
+    "e2e": "node --test --test-timeout=120000 e2e/hub.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
