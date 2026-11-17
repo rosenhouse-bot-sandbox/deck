@@ -54,10 +54,14 @@ function select(link) {
   link?.focus({ focusVisible: true });
 }
 
+// Returns whether there was a card to move to.
 function move(dir) {
   const all = links();
-  if (!all.length) return;
-  select(all[neighbor(all.map((a) => a.getBoundingClientRect()), all.indexOf(current()), dir)]);
+  if (!all.length) return false;
+  const from = all.indexOf(current());
+  const to = neighbor(all.map((a) => a.getBoundingClientRect()), from, dir);
+  select(all[to]);
+  return to !== from;
 }
 
 function play(pad) {
@@ -68,10 +72,10 @@ function play(pad) {
 }
 
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+// At an edge the key falls through, so the browser can still scroll.
 addEventListener('keydown', (e) => {
-  if (!ARROWS[e.key]) return;
-  e.preventDefault();
-  move(ARROWS[e.key]);
+  if (!ARROWS[e.key] || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (move(ARROWS[e.key])) e.preventDefault();
 });
 
 // One reader per pad index, so each pad's held buttons are tracked separately.

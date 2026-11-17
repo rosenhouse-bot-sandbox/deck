@@ -2,23 +2,35 @@
 export const BUTTON = { a: 0, b: 1, start: 9, up: 12, down: 13, left: 14, right: 15 };
 const STICK = 0.5;
 
-const center = (r) => [r.left + r.width / 2, r.top + r.height / 2];
+const AXES = {
+  left: { near: 'right', far: 'left', sign: -1, across: ['top', 'height'] },
+  right: { near: 'left', far: 'right', sign: 1, across: ['top', 'height'] },
+  up: { near: 'bottom', far: 'top', sign: -1, across: ['left', 'width'] },
+  down: { near: 'top', far: 'bottom', sign: 1, across: ['left', 'width'] },
+};
+const SUBPIXEL = 1;
 
-// Returns the index of the closest box from `boxes[from]` in `dir`, or `from` at an edge.
-// Distance across the direction counts double, so a box in line wins over a diagonal one.
+const edges = (r) => ({ left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height });
+
+// Returns the index of the nearest box from `boxes[from]` in `dir`, or `from` if there is none.
+// Boxes that overlap the current one across the direction win; otherwise distance across counts double.
 export function neighbor(boxes, from, dir) {
-  const [x0, y0] = center(boxes[from]);
-  const [ax, sign] = { left: [0, -1], right: [0, 1], up: [1, -1], down: [1, 1] }[dir];
-  let best = from;
-  let bestScore = Infinity;
-  boxes.forEach((box, i) => {
-    const d = center(box).map((v, k) => v - [x0, y0][k]);
-    const along = d[ax] * sign;
-    if (along <= 1) return;
-    const score = along + 2 * Math.abs(d[1 - ax]);
-    if (score < bestScore) [best, bestScore] = [i, score];
-  });
-  return best;
+  const { near, far, sign, across: [start, size] } = AXES[dir];
+  const current = boxes[from];
+  const middle = (r) => r[start] + r[size] / 2;
+  const candidates = boxes
+    .map((box, i) => ({
+      i,
+      gap: (edges(box)[near] - edges(current)[far]) * sign,
+      offset: Math.abs(middle(box) - middle(current)),
+      aligned: box[start] < current[start] + current[size] && current[start] < box[start] + box[size],
+    }))
+    .filter((c) => c.i !== from && c.gap >= -SUBPIXEL);
+  const aligned = candidates.filter((c) => c.aligned);
+  const [best] = aligned.length
+    ? aligned.sort((a, b) => a.gap - b.gap || a.offset - b.offset)
+    : candidates.sort((a, b) => a.gap + 2 * a.offset - (b.gap + 2 * b.offset));
+  return best?.i ?? from;
 }
 
 export function direction(gamepad) {

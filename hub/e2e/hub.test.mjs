@@ -155,6 +155,21 @@ test('arrow keys and Enter work too', async () => {
   await page.close();
 });
 
+test('an arrow key with no card that way is left to the browser', async () => {
+  const { page } = await open();
+  const prevented = (key) =>
+    page.evaluate((key) => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      document.activeElement.dispatchEvent(event);
+      return event.defaultPrevented;
+    }, key);
+  assert.equal(await prevented('ArrowUp'), false);
+  assert.equal(await selected(page), '🏎️ Racer');
+  assert.equal(await prevented('ArrowRight'), true);
+  assert.equal(await selected(page), 'Alpha');
+  await page.close();
+});
+
 test('Start opens a game too', async () => {
   const { page } = await open();
   await press(page, START);

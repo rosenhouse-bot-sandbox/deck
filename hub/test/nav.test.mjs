@@ -24,6 +24,15 @@ test('neighbor stays put at an edge', () => {
   assert.equal(neighbor(GRID, 3, 'down'), 3);
 });
 
+test('neighbor ignores a card that overlaps on the axis of movement', () => {
+  assert.equal(neighbor([box(0, 0), box(50, 80)], 0, 'right'), 0);
+});
+
+test('neighbor prefers a card that overlaps across the direction, however far off centre', () => {
+  const wide = { left: 90, top: 80, width: 400, height: 60 };
+  assert.equal(neighbor([box(0, 0), box(105, 80), wide], 0, 'down'), 2);
+});
+
 const pad = ({ buttons = [], axes = [0, 0] } = {}) => ({
   axes,
   buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: buttons.includes(i) })),
