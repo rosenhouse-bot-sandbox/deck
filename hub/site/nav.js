@@ -25,7 +25,7 @@ export function neighbor(boxes, from, dir) {
       offset: Math.abs(middle(box) - middle(current)),
       aligned: box[start] < current[start] + current[size] && current[start] < box[start] + box[size],
     }))
-    .filter((c) => c.i !== from && c.gap >= -SUBPIXEL);
+    .filter((c) => c.gap >= -SUBPIXEL);
   const aligned = candidates.filter((c) => c.aligned);
   const [best] = aligned.length
     ? aligned.sort((a, b) => a.gap - b.gap || a.offset - b.offset)

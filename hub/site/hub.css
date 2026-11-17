@@ -27,8 +27,8 @@ h1 { margin: 0; font-size: 2.25rem; letter-spacing: 0.02em; }
 main {
   overflow-y: auto;
   padding: 32px 48px;
+  scroll-padding-block: 32px;
   scrollbar-color: var(--muted) transparent;
-  scrollbar-gutter: stable;
 }
 
 #games, footer { user-select: none; }

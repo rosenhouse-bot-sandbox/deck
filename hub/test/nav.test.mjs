@@ -33,6 +33,19 @@ test('neighbor prefers a card that overlaps across the direction, however far of
   assert.equal(neighbor([box(0, 0), box(105, 80), wide], 0, 'down'), 2);
 });
 
+test('neighbor allows a sub-pixel overlap along the direction', () => {
+  assert.equal(neighbor([box(0, 0), box(99.5, 0)], 0, 'right'), 1);
+});
+
+test('neighbor breaks a tie between cards in line by distance across', () => {
+  const wide = { left: 0, top: 0, width: 300, height: 60 };
+  assert.equal(neighbor([wide, box(10, 80), box(150, 80)], 0, 'down'), 2);
+});
+
+test('with no card in line, neighbor counts distance across double', () => {
+  assert.equal(neighbor([box(0, 0), box(200, 80), box(101, 230)], 0, 'down'), 2);
+});
+
 const pad = ({ buttons = [], axes = [0, 0] } = {}) => ({
   axes,
   buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: buttons.includes(i) })),

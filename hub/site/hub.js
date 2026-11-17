@@ -74,7 +74,7 @@ function play(pad) {
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
 // At an edge the key falls through, so the browser can still scroll.
 addEventListener('keydown', (e) => {
-  if (!ARROWS[e.key] || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (!ARROWS[e.key] || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
   if (move(ARROWS[e.key])) e.preventDefault();
 });
 

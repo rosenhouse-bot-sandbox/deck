@@ -25,15 +25,10 @@ function buildSite() {
     const dir = join(root, folder(title));
     mkdirSync(dir);
     writeFileSync(join(dir, 'game.json'), JSON.stringify({ title }));
-    // Like a game, this page opts in to view transitions and records whether it got one.
+    // Like a game, this page opts in to view transitions.
     writeFileSync(
       join(dir, 'index.html'),
-      `<!doctype html><title>${title}</title>
-      <style>@view-transition { navigation: auto; }</style>
-      <script>addEventListener('pagereveal', async (e) => {
-        window.transitioned = (await e.viewTransition?.ready.then(() => true, () => false)) ?? false;
-      });</script>
-      <a href="../">Hub</a>`,
+      `<!doctype html><title>${title}</title><style>@view-transition { navigation: auto; }</style><a href="../">Hub</a>`,
     );
   }
   writeFileSync(join(root, 'games.json'), JSON.stringify(catalog(root)));
@@ -67,8 +62,8 @@ after(async () => {
   server?.close();
 });
 
-async function open({ held = [] } = {}) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+async function open({ held = [], reducedMotion = 'no-preference' } = {}) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
@@ -83,6 +78,10 @@ async function open({ held = [] } = {}) {
       return [{ index: 0, connected: true, axes, buttons: Array.from({ length: 17 }, (_, i) => button(i)) }, null, null, null];
     };
     window.fakePad = set;
+    // Each page records whether it arrived with a view transition.
+    addEventListener('pagereveal', async (e) => {
+      window.transitioned = (await e.viewTransition?.ready.then(() => true, () => false)) ?? false;
+    });
   }, held);
   await page.goto(origin);
   await page.waitForSelector('#games a');
@@ -164,16 +163,23 @@ test('arrow keys and Enter work too', async () => {
   await page.close();
 });
 
-test('an arrow key with no card that way is left to the browser', async () => {
+test('an arrow key with a modifier or no card that way is left to the browser', async () => {
   const { page } = await open();
-  const prevented = (key) =>
-    page.evaluate((key) => {
-      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
-      document.activeElement.dispatchEvent(event);
-      return event.defaultPrevented;
-    }, key);
+  const prevented = (key, modifiers = {}) =>
+    page.evaluate(
+      ([key, modifiers]) => {
+        const event = new KeyboardEvent('keydown', { key, ...modifiers, bubbles: true, cancelable: true });
+        document.activeElement.dispatchEvent(event);
+        return event.defaultPrevented;
+      },
+      [key, modifiers],
+    );
   assert.equal(await prevented('ArrowUp'), false);
   assert.equal(await selected(page), '🏎️ Racer');
+  for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey']) {
+    assert.equal(await prevented('ArrowRight', { [modifier]: true }), false, modifier);
+    assert.equal(await selected(page), '🏎️ Racer');
+  }
   assert.equal(await prevented('ArrowRight'), true);
   assert.equal(await selected(page), 'Alpha');
   await page.close();
@@ -185,6 +191,26 @@ test('opening a game is a view transition', async () => {
   await page.waitForURL(`${origin}racer/`);
   await page.waitForFunction(() => window.transitioned !== undefined);
   assert.equal(await page.evaluate(() => window.transitioned), true);
+  await page.close();
+});
+
+test('returning to the hub is a view transition', async () => {
+  const { page } = await open();
+  await page.keyboard.press('Enter');
+  await page.waitForURL(`${origin}racer/`);
+  await page.click('a');
+  await page.waitForFunction(() => window.transitioned !== undefined);
+  assert.equal(await page.evaluate(() => window.transitioned), true);
+  await page.close();
+});
+
+test('with reduced motion, the selected card does not grow and pages do not transition', async () => {
+  const { page } = await open({ reducedMotion: 'reduce' });
+  assert.equal(await page.evaluate(() => getComputedStyle(document.activeElement).scale), 'none');
+  await page.keyboard.press('Enter');
+  await page.waitForURL(`${origin}racer/`);
+  await page.waitForFunction(() => window.transitioned !== undefined);
+  assert.equal(await page.evaluate(() => window.transitioned), false);
   await page.close();
 });
 
@@ -205,7 +231,10 @@ test('the selected card and its glow stay in view while scrolling', async () => 
       return card.top - outlineAndGlow >= view.top && card.bottom + outlineAndGlow <= view.bottom;
     });
   assert.ok(await visible(), 'first row');
-  await press(page, DOWN, 4);
+  await press(page, DOWN, 3);
+  assert.equal(await selected(page), 'India');
+  assert.ok(await visible(), 'fourth row');
+  await press(page, DOWN);
   assert.equal(await selected(page), 'Lima');
   assert.ok(await visible(), 'last row');
   await page.close();
