@@ -25,7 +25,16 @@ function buildSite() {
     const dir = join(root, folder(title));
     mkdirSync(dir);
     writeFileSync(join(dir, 'game.json'), JSON.stringify({ title }));
-    writeFileSync(join(dir, 'index.html'), `<!doctype html><title>${title}</title><a href="../">Hub</a>`);
+    // Like a game, this page opts in to view transitions and records whether it got one.
+    writeFileSync(
+      join(dir, 'index.html'),
+      `<!doctype html><title>${title}</title>
+      <style>@view-transition { navigation: auto; }</style>
+      <script>addEventListener('pagereveal', async (e) => {
+        window.transitioned = (await e.viewTransition?.ready.then(() => true, () => false)) ?? false;
+      });</script>
+      <a href="../">Hub</a>`,
+    );
   }
   writeFileSync(join(root, 'games.json'), JSON.stringify(catalog(root)));
   return root;
@@ -167,6 +176,15 @@ test('an arrow key with no card that way is left to the browser', async () => {
   assert.equal(await selected(page), '🏎️ Racer');
   assert.equal(await prevented('ArrowRight'), true);
   assert.equal(await selected(page), 'Alpha');
+  await page.close();
+});
+
+test('opening a game is a view transition', async () => {
+  const { page } = await open();
+  await page.keyboard.press('Enter');
+  await page.waitForURL(`${origin}racer/`);
+  await page.waitForFunction(() => window.transitioned !== undefined);
+  assert.equal(await page.evaluate(() => window.transitioned), true);
   await page.close();
 });
 

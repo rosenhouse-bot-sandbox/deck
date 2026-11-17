@@ -86,12 +86,37 @@ test('players join, leave and toggle steering help with their own pads', async (
   await page.close();
 });
 
+// Like the hub, this page opts in to view transitions.
+const FAKE_HUB = `<!doctype html><title>Hub</title>
+  <style>@view-transition { navigation: auto; }</style>
+  <a href="zoomies/">Zoomies</a>`;
+const recordTransition = () =>
+  addEventListener('pagereveal', async (e) => {
+    window.transitioned = (await e.viewTransition?.ready.then(() => true, () => false)) ?? false;
+  });
+
+test('arriving from the hub is a view transition', async () => {
+  const page = await browser.newPage();
+  await installGamepads(page);
+  await page.addInitScript(recordTransition);
+  await page.route(HUB, (route) => route.fulfill({ body: FAKE_HUB, contentType: 'text/html' }));
+  await page.goto(HUB);
+  await page.click('a');
+  await page.waitForURL(GAME);
+  await page.waitForFunction(() => window.transitioned !== undefined);
+  assert.equal(await page.evaluate(() => window.transitioned), true);
+  await page.close();
+});
+
 test('Y on the join screen goes back to the hub', async () => {
   const { page } = await open();
   await hold(page, 0, []);
-  await page.route(HUB, (route) => route.fulfill({ body: 'hub' }));
+  await page.addInitScript(recordTransition);
+  await page.route(HUB, (route) => route.fulfill({ body: FAKE_HUB, contentType: 'text/html' }));
   await hold(page, 0, [BUTTON.y]);
   await page.waitForURL(HUB);
+  await page.waitForFunction(() => window.transitioned !== undefined);
+  assert.equal(await page.evaluate(() => window.transitioned), true);
   await page.close();
 });
 

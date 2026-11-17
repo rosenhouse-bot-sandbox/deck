@@ -3,9 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self' 'sha256-HZ4rB03Xrq48TXRrshZ0A/rzCbrI8O6Hcrjxi45i7Q8='" />
     <meta name="color-scheme" content="dark" />
     <title>Games</title>
+    <!-- Inline, because Chrome sometimes misses this rule in a linked stylesheet. The CSP holds its hash. -->
+    <style>@media (prefers-reduced-motion: no-preference) { @view-transition { navigation: auto; } }</style>
     <link rel="stylesheet" href="hub.css" />
     <script type="module" src="hub.js"></script>
   </head>
